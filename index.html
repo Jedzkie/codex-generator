@@ -75,6 +75,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .btn.pri{border-color:var(--amber);background:var(--amber);color:#1A1205}
 .btn.pri:hover{background:#F0B649}
 .btn.ghost{background:transparent}
+a.btn{text-decoration:none}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn svg{width:14px;height:14px}
 
@@ -130,6 +131,9 @@ button,input,select,textarea{font:inherit;color:inherit}
 .sec{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
 .sec h3{margin:0;font:600 13px var(--f-ui);letter-spacing:.09em;text-transform:uppercase;color:var(--soft)}
 .sec .n{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.sec h3.fn{font:600 13px var(--f-mono);letter-spacing:0;text-transform:none}
+.sec.wrap{flex-wrap:wrap;row-gap:6px}
+.sec .acts{display:flex;gap:6px}
 .sec .sp{margin-left:auto}
 .slots{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .slot{display:grid;grid-template-columns:40px minmax(0,1fr) 26px;gap:6px 10px;padding:8px;border:1px solid var(--line);border-radius:3px;background:var(--panel2)}
@@ -384,6 +388,11 @@ button,input,select,textarea{font:inherit;color:inherit}
         <div class="sec"><h3>My codexes</h3><span class="n" id="savedN"></span><button class="btn ghost sp" id="copyAll" type="button">Copy all</button><button class="btn ghost" id="newCx" type="button">New codex</button></div>
         <p class="repo">Every saved codex goes into <a id="repoLink" href="https://github.com/Jedzkie/codex-generator/blob/main/codex_db.conf" target="_blank" rel="noopener">codex_db.conf on GitHub</a>.</p>
         <div class="saved" id="saved"></div>
+      </div>
+      <div class="full">
+        <div class="sec wrap"><h3 class="fn">codex_db.conf</h3><span class="n" id="fileN"></span><span class="sp acts"><button class="btn ghost" id="copyFile" type="button">Copy</button><a class="btn ghost" id="fileLink" href="https://github.com/Jedzkie/codex-generator/blob/main/codex_db.conf" target="_blank" rel="noopener">Open on GitHub</a></span></div>
+        <p class="repo" id="fileNote">Every saved codex, as codex_db.conf on GitHub has it now.</p>
+        <div class="code" style="margin-top:8px"><pre id="fileText"></pre></div>
       </div>
     </div>
   </section>
@@ -1077,10 +1086,10 @@ function flash(t) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { $('toast').textContent = ''; }, 2600);
 }
-function copyText(text, done) {
+function copyText(text, done, shown) {
   const fallback = () => {
     const r = document.createRange();
-    r.selectNodeContents($('conf'));
+    r.selectNodeContents(shown || $('conf'));
     const sel = getSelection();
     sel.removeAllRanges();
     sel.addRange(r);
@@ -1185,12 +1194,33 @@ function logout() {
   loginEnded('');
   if (token) call('/codex/logout', { session: token }).catch(() => {});
 }
-// the ids in use and the file's page on GitHub
+// codex_db.conf as GitHub has it (every saved codex): the api-server's copy, new after each save
+let fileText = '';
+async function refreshFile(again) {
+  let text = null;
+  try { const r = await fetch(API + '/codex/file'); if (r.ok) text = await r.text(); } catch (e) { /* unreachable */ }
+  const head = text === null ? '' : text.slice(0, text.indexOf('\n'));
+  if (head === 'ok') fileText = text.slice(3);
+  else if (head === 'missing') fileText = '';
+  // the api-server reads the file a moment after it starts
+  if (head === 'wait' && !again) setTimeout(() => refreshFile(true), 3000);
+  const count = (fileText.match(/^\tId:\s*\d+/gm) || []).length;
+  $('fileN').textContent = head === 'ok' ? count + (count === 1 ? ' codex' : ' codexes') : '';
+  $('fileNote').textContent = head === 'ok' ? 'Every saved codex, as codex_db.conf on GitHub has it now.'
+    : head === 'missing' ? 'No codex is saved yet: the first save makes codex_db.conf.'
+    : head === 'wait' ? 'The save server is reading codex_db.conf; it shows in a moment.'
+    : 'The save server cannot be reached; the file is on GitHub.';
+  $('fileText').innerHTML = fileText ? highlight(fileText) : '';
+  $('fileText').parentNode.hidden = !fileText;
+  $('copyFile').disabled = !fileText;
+}
+// the ids in use and the file's page on GitHub (and the file itself)
 async function refreshUsed() {
   let lines;
+  refreshFile();
   try { lines = (await call('/codex/list')).split('\n').map(l => l.split('\t')); } catch (e) { return; }
   if (!lines[0] || lines[0][0] !== 'ok') return;
-  if (/^https:\/\/github\.com\//.test(lines[0][1] || '')) $('repoLink').href = lines[0][1];
+  if (/^https:\/\/github\.com\//.test(lines[0][1] || '')) $('repoLink').href = $('fileLink').href = lines[0][1];
   const used = lines.find(l => l[0] === 'used');
   if (!used) return;
   setUsed((used[1] || '').split(',').filter(Boolean).map(r => r.split('-').map(Number)).map(([a, b]) => [a, b || a]));
@@ -1268,6 +1298,7 @@ function wire() {
   $('copy').addEventListener('click', () => copyText(confOf(S), 'Copied the entry.'));
   $('copyAll').addEventListener('click', () => copyText(saved.map(cx => confOf(normalized(cx))).join('\n'), 'Copied ' + saved.length + ' codexes.'));
   $('save').addEventListener('click', saveCodex);
+  $('copyFile').addEventListener('click', () => copyText(fileText, 'Copied codex_db.conf.', $('fileText')));
   $('newCx').addEventListener('click', () => {
     editing = -1;
     load({ name: '', tab: S.tab, cat: S.cat, cls: S.cls, id: '', start: '', end: '', slots: [], stats: [] });
