@@ -11,8 +11,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=JetBrains+Mono&family=Marcellus+SC&display=swap">
 <style>
-/* Layout: a three-pane workbench (items | codex | preview + codex_db.conf) that stacks to one column on a phone, then the
-   mockup notes. One dark look on purpose: it is the game client's own palette (slate panels, amber accent, the rarity
+/* Layout: a three-pane workbench (items | codex | preview + codex_db.conf) that stacks to one column on a phone, the
+   log of changes as a terminal, then the mockup notes. One dark look on purpose: it is the game client's own palette (slate panels, amber accent, the rarity
    colours of the item wells). */
 :root{
   color-scheme:dark;
@@ -218,6 +218,33 @@ a.btn{text-decoration:none}
 .repo{margin:8px 0 0;font-size:12.5px;color:var(--muted)}
 .repo a{color:var(--amber2)}
 
+/* ---------- the log of changes: a terminal across the bottom ---------- */
+.term{margin-top:24px;border:1px solid var(--line);border-radius:3px;background:#07080B;overflow:hidden}
+.tbar{display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+.tdots{display:flex;gap:6px}
+.tdots i{width:9px;height:9px;border-radius:50%;background:var(--line2)}
+.tdots i:first-child{background:rgba(255,107,107,.7)}.tdots i:nth-child(2){background:rgba(255,181,71,.7)}.tdots i:last-child{background:rgba(98,210,111,.7)}
+.tbar h2{margin:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 12.5px var(--f-mono);color:var(--soft)}
+.tst{display:inline-flex;align-items:center;gap:6px;margin-left:auto;font:12px var(--f-mono);color:var(--muted);white-space:nowrap}
+.tst::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.tst.ok{color:var(--good)}.tst.down{color:var(--bad)}
+.tbody{height:320px;overflow:auto;padding:10px 14px 12px;font:12.5px/1.6 var(--f-mono);color:#C9D0DB;overscroll-behavior:contain}
+.tl{white-space:pre-wrap;overflow-wrap:anywhere}
+.tp{color:var(--soft)}
+.tu{color:var(--good)}.th{color:#7CC4FF}
+.tn{color:var(--muted)}
+.te{margin-top:8px}
+.tt{color:var(--muted)}
+.tw{color:var(--fg)}
+.te-add .tv{color:var(--good)}.te-change .tv{color:var(--warn)}.te-delete .tv{color:var(--bad)}
+.tc{color:var(--amber2);text-decoration:none}
+.tc:hover{text-decoration:underline}
+.td{padding-left:2ch;text-indent:-2ch;margin-left:2ch}
+.td-m{color:#F09A9A}.td-p{color:#9FE0A6}.td-n{color:var(--muted)}
+.tk{color:var(--soft)}
+.tcur{display:inline-block;width:.6em;height:1.1em;vertical-align:-.2em;background:var(--soft);animation:tBlink 1.1s steps(1) infinite}
+@keyframes tBlink{50%{opacity:0}}
+
 /* ---------- Discord login ---------- */
 .acct{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;min-height:32px}
 .btn.dc{border-color:#5865F2;background:#5865F2;color:#fff}
@@ -272,6 +299,7 @@ a.btn{text-decoration:none}
   .stat .x{grid-row:1;grid-column:3}
   .brand h1{font-size:23px}
   .facts{margin-left:0}
+  .tbody{height:280px;padding:8px 10px 10px;font-size:12px}
 }
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none !important;transition:none !important}
@@ -382,7 +410,7 @@ a.btn{text-decoration:none}
         <div class="cxrow" id="card"></div>
       </div>
       <div class="full">
-        <div class="codebar"><span class="file">db/codex_db.conf</span><span class="toast sp" id="toast" aria-live="polite"></span><button class="btn" id="copy" type="button">Copy</button><button class="btn pri" id="save" type="button">Save to codex_db.conf</button></div>
+        <div class="codebar"><span class="file">db/codex_db.conf</span><span class="toast sp" id="toast" aria-live="polite"></span><button class="btn" id="copy" type="button">Copy</button><button class="btn ghost" id="cancelEdit" type="button" title="Leave the edit; codex_db.conf stays as it is" hidden>Cancel</button><button class="btn pri" id="save" type="button">Save to codex_db.conf</button></div>
         <div class="code" style="margin-top:8px"><pre id="conf"></pre></div>
       </div>
       <div class="full">
@@ -393,6 +421,11 @@ a.btn{text-decoration:none}
     </div>
   </section>
 </main>
+
+<section class="term" aria-labelledby="hLog">
+  <div class="tbar"><span class="tdots" aria-hidden="true"><i></i><i></i><i></i></span><h2 id="hLog">codex_db.conf log</h2><span class="tst load" id="logState">connecting</span></div>
+  <div class="tbody" id="log" role="log" aria-live="polite" tabindex="0"></div>
+</section>
 
 </div>
 <script>
@@ -579,9 +612,8 @@ const S = {
 };
 const F = { q: '', kind: -1, src: new Set(SRC.map(s => s[0])), sub: '', line: '' };
 // codex_db.conf on GitHub as the api-server has it: its text and its codexes (state ok, missing, wait, load, down or
-// bad); the ids of them the login saved
+// bad)
 const FILE = { state: 'load', text: '', list: [], error: '' };
-const MINE = new Set();
 // the id of the saved codex the builder edits, 0 for a new one
 let editId = 0;
 
@@ -692,9 +724,9 @@ function addItem(id) {
 }
 function tabInfo(t) { return TABS.find(x => x[0] === t); }
 function fileEntry(id) { return FILE.list.find(e => +e.cx.id === id) || null; }
-// the saved codex the builder edits, while codex_db.conf has it and the login saved it: Save changes that entry
+// the saved codex the builder edits, while codex_db.conf has it: Save changes that entry
 function editingSaved() {
-  const e = editId && loggedIn() && MINE.has(editId) ? fileEntry(editId) : null;
+  const e = editId ? fileEntry(editId) : null;
   return e ? e.cx : null;
 }
 const ownId = id => { const own = editingSaved(); return !!own && +own.id === id; };
@@ -988,6 +1020,8 @@ function renderOut() {
   const same = loggedIn() && unchanged();
   $('save').textContent = ACC.saving ? 'Saving...' : !loggedIn() ? 'Log in to save' : same ? 'Saved' : editingSaved() ? 'Update codex_db.conf' : 'Save to codex_db.conf';
   $('save').disabled = ACC.saving || same;
+  $('cancelEdit').hidden = !editingSaved();
+  $('cancelEdit').disabled = ACC.saving;
 }
 // ---------------------------------------------------------------- codex_db.conf read back
 // libconfig as codex_db.conf uses it: names, strings (and <"..."> scripts), numbers, groups, lists and arrays, comments
@@ -1142,11 +1176,11 @@ function renderSaved() {
   const box = $('saved');
   box.innerHTML = '';
   const n = FILE.list.length;
-  const yours = FILE.list.filter(e => MINE.has(+e.cx.id)).length;
-  $('savedN').textContent = FILE.state === 'ok' ? n + (n === 1 ? ' codex' : ' codexes') + (loggedIn() ? ' · ' + yours + ' yours' : '') : '';
+  $('savedN').textContent = FILE.state === 'ok' ? n + (n === 1 ? ' codex' : ' codexes') : '';
   $('copyAll').disabled = !FILE.text;
   $('fileNote').textContent = {
-    ok: 'Every codex in codex_db.conf on GitHub. ' + (loggedIn() ? 'Edit or Delete on yours changes codex_db.conf at once.' : 'Log in to edit or delete the ones you saved.'),
+    ok: 'Every codex in codex_db.conf on GitHub. ' + (loggedIn() ? 'Update and Delete change codex_db.conf at once' : 'Log in with Discord to update or delete one') +
+      '; the log at the bottom shows every change and who made it.',
     missing: 'No codex is saved yet: the first save makes codex_db.conf.',
     wait: 'The save server is reading codex_db.conf; the codexes show in a moment.',
     load: 'Reading codex_db.conf...',
@@ -1157,12 +1191,10 @@ function renderSaved() {
   for (const e of FILE.list) {
     const c = normalized(e.cx);
     const id = +c.id;
-    const own = loggedIn() && MINE.has(id);
-    const cur = own && id === editId;
+    const cur = id === editId;
     const d = el('article', 'svc' + (cur ? ' cur' : '') + (id === freshId ? ' fresh' : ''));
     d.setAttribute('aria-label', (c.name || 'Untitled codex') + ', id ' + c.id);
-    if (loggedIn()) d.appendChild(el('div', 'svh', '<span class="svs' + (own ? ' in' : '') + '">' + (own ? 'Yours' : 'Saved by another player') + '</span>' +
-      (cur ? '<span class="sve">Editing</span>' : '')));
+    if (cur) d.appendChild(el('div', 'svh', '<span class="sve">Editing</span>'));
     const row = el('div', 'cxrow');
     fillCard(row, c, e.raw);
     const stage = el('div', 'svcard');
@@ -1175,7 +1207,7 @@ function renderSaved() {
     }).join('')));
     d.appendChild(el('div', 'svm', esc(metaText(c))));
     const unread = e.skipped.concat(e.raw);
-    if (unread.length) d.appendChild(el('div', 'svw', esc('This page does not read: ' + unread.join('; ') + (own ? '. Update leaves ' + (unread.length > 1 ? 'these' : 'it') + ' out.' : '.'))));
+    if (unread.length) d.appendChild(el('div', 'svw', esc('This page does not read: ' + unread.join('; ') + '. Update leaves ' + (unread.length > 1 ? 'these' : 'it') + ' out.')));
     if (cardNote.id === id) d.appendChild(el('div', 'svw', esc(cardNote.text)));
     const act = el('div', 'sva');
     const link = el('a', null, 'View on GitHub');
@@ -1183,22 +1215,21 @@ function renderSaved() {
     link.target = '_blank';
     link.rel = 'noopener';
     act.appendChild(link);
-    if (own) {
-      const ed = el('button', 'btn', cur ? 'Editing' : 'Edit');
-      ed.type = 'button';
-      ed.disabled = cur;
-      ed.title = 'Change it here; Update puts the change in codex_db.conf';
-      ed.addEventListener('click', () => editSaved(id));
-      const del = el('button', 'btn ghost', deletingId === id ? 'Deleting...' : 'Delete');
-      del.type = 'button';
-      del.disabled = !!deletingId;
-      del.title = 'Take it out of codex_db.conf on GitHub';
-      del.addEventListener('click', () => {
-        if (del.dataset.sure) deleteCodex(id);
-        else { del.dataset.sure = '1'; del.textContent = 'Sure?'; }
-      });
-      act.append(ed, del);
-    }
+    const ed = el('button', 'btn', cur ? 'Editing' : 'Edit');
+    ed.type = 'button';
+    ed.disabled = cur;
+    ed.title = 'Change it here; Update puts the change in codex_db.conf';
+    ed.addEventListener('click', () => editSaved(id));
+    const del = el('button', 'btn ghost', deletingId === id ? 'Deleting...' : 'Delete');
+    del.type = 'button';
+    del.disabled = !!deletingId;
+    del.title = loggedIn() ? 'Take it out of codex_db.conf on GitHub' : 'Log in with Discord to delete it';
+    del.addEventListener('click', () => {
+      if (!loggedIn()) login();
+      else if (del.dataset.sure) deleteCodex(id);
+      else { del.dataset.sure = '1'; del.textContent = 'Sure?'; }
+    });
+    act.append(ed, del);
     d.appendChild(act);
     box.appendChild(d);
   }
@@ -1296,7 +1327,6 @@ function renderAccount() {
 }
 function loginEnded(note) {
   Object.assign(ACC, { token: '', name: '', avatar: '', until: 0, state: 'out', code: '', link: '', note: note || '', bad: !!note, join: '' });
-  MINE.clear();
   keepLogin();
   render();
 }
@@ -1325,7 +1355,6 @@ async function login() {
       Object.assign(ACC, { token: a[1], name: a[2], avatar: a[3], until: Date.now() + (+a[4] || 12) * 3600000, state: 'in', code: '', link: '' });
       keepLogin();
       render();
-      refreshMine().then(render);
       flash('Logged in as ' + a[2] + '.');
       setTimeout(() => { if (win && !win.closed) win.close(); }, 1500);
       return;
@@ -1364,19 +1393,113 @@ async function refreshUsed() {
   const used = lines.find(l => l[0] === 'used');
   if (used) setUsed((used[1] || '').split(',').filter(Boolean).map(r => r.split('-').map(Number)).map(([a, b]) => [a, b || a]));
 }
-// the codexes of the file the login saved (only those change or leave the file from here)
-async function refreshMine() {
-  if (!loggedIn()) { MINE.clear(); return; }
-  let a;
-  try { a = (await call('/codex/mine', { session: ACC.token })).split('\t'); } catch (e) { return; }
-  if (a[0] === 'ok') {
-    MINE.clear();
-    (a[1] || '').split(',').filter(Boolean).forEach(x => MINE.add(+x));
-  } else if (a[1] === 'login') loginEnded(a[2]);
-}
 async function refresh() {
-  await Promise.all([refreshFile(), refreshUsed(), refreshMine()]);
+  await Promise.all([refreshFile(), refreshUsed(), refreshLog()]);
   render();
+}
+
+// ---------------------------------------------------------------- the log of changes (the terminal at the bottom)
+// the changes the api-server keeps (its last 50; who, when, the entry before and after), the newest last; state load,
+// ok or down
+const LOG = { last: 0, list: [], state: 'load', fresh: false };
+const pad = n => String(n).padStart(2, '0');
+function logTime(t) {
+  const d = new Date(t * 1000);
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+}
+// an entry of the log as the page reads it, null when it does not
+function logEntry(text) {
+  if (typeof text !== 'string') return null;
+  try { return codexesOf('codex_db: (\n' + text + '\n)\n')[0] || null; } catch (e) { return null; }
+}
+// what a change did, as lines: [sign, text] (sign -, + or a space)
+function logLines(r) {
+  const was = logEntry(r.before), now = logEntry(r.after);
+  const fields = e => {
+    if (!e) return [];
+    const c = normalized(e.cx);
+    const where = (tabInfo(c.tab) ? tabInfo(c.tab)[1] : c.tab) + ' / ' + (c.cat || '-');
+    const out = [['Id', c.id], ['Name', '"' + c.name + '"'], ['Where', where]];
+    if (c.tab === 'Character') out.push(['Class', c.cls || 'Every class']);
+    if (c.tab === 'Event') out.push(['Dates', date(c.start) + ' to ' + date(c.end)]);
+    for (const s of c.slots) out.push(['Item', RAR[s.r] + ' ' + (s.ref ? '+' + s.ref + ' ' : '') + label(ITEM[s.id]) + (s.amt > 1 ? ' x' + s.amt : '')]);
+    for (const x of e.skipped) out.push(['Item', x.replace(/^item /, '') + ' (not on this page)']);
+    for (const t of c.stats) out.push(['Stat', statText(t)]);
+    for (const x of e.raw) out.push(['Script', x]);
+    return out;
+  };
+  // an entry the page does not read: its lines as they are
+  const plain = text => (text || '').split('\n').map(l => l.trim()).filter(l => l && l !== '{' && l !== '},').map(l => ['', l]);
+  const a = r.before == null ? [] : was ? fields(was) : plain(r.before);
+  const b = r.after == null ? [] : now ? fields(now) : plain(r.after);
+  const key = f => f[0] + '\t' + f[1];
+  if (r.act !== 'change') return (r.act === 'delete' ? a : b).map(f => [r.act === 'delete' ? '-' : '+', f]);
+  // a change: the lines of the entry that went and came, field by field (the old one first)
+  const left = b.map(key);
+  const gone = a.filter(f => { const i = left.indexOf(key(f)); if (i < 0) return true; left[i] = null; return false; });
+  const right = a.map(key);
+  const came = b.filter(f => { const i = right.indexOf(key(f)); if (i < 0) return true; right[i] = null; return false; });
+  const out = [];
+  for (const k of ['Id', 'Name', 'Where', 'Class', 'Dates', 'Item', 'Stat', 'Script', '']) {
+    for (const f of gone) if (f[0] === k) out.push(['-', f]);
+    for (const f of came) if (f[0] === k) out.push(['+', f]);
+  }
+  return out.length ? out : [[' ', ['', 'Only the order of its lines changed.']]];
+}
+function renderLog() {
+  const box = $('log');
+  const end = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+  const verb = { add: 'added', change: 'changed', delete: 'deleted' };
+  let html = '<div class="tl tp"><span class="tu">ton@codex-generator</span>:<span class="th">~</span>$ tail -f codex_db.conf.log</div>';
+  if (LOG.state === 'load') html += '<div class="tl tn"># Reading the log...</div>';
+  else if (LOG.state === 'down' && !LOG.list.length) html += '<div class="tl tn"># The save server cannot be reached; the log shows when it answers.</div>';
+  else if (!LOG.list.length) html += '<div class="tl tn"># No change yet. Each save, update and delete shows here with who made it.</div>';
+  for (const r of LOG.list) {
+    const act = verb[r.act] ? r.act : 'change';
+    const sha = /^https:\/\/github\.com\/[^"<>\s]+\/commit\/([0-9a-f]{7})[0-9a-f]*$/.exec(r.commit || '');
+    html += '<div class="te te-' + act + '"><div class="tl"><span class="tt">[' + logTime(+r.t || 0) + ']</span> <b class="tw">' + esc(r.who || 'Someone') + '</b> <span class="tv">' +
+      verb[act] + '</span> codex <b>' + esc(String(r.id)) + '</b> ' + esc('"' + (r.name || '') + '"') +
+      (sha ? ' <a class="tc" href="' + esc(r.commit) + '" target="_blank" rel="noopener" title="The commit on GitHub">' + sha[1] + '</a>' : '') + '</div>' +
+      logLines(r).map(([sign, [k, v]]) => '<div class="tl td td-' + (sign === '-' ? 'm' : sign === '+' ? 'p' : 'n') + '">' + (sign === ' ' ? '&nbsp;' : sign) + ' ' +
+        (k ? '<span class="tk">' + k + ':</span> ' : '') + esc(v) + '</div>').join('') + '</div>';
+  }
+  html += '<div class="tl tp"><span class="tu">ton@codex-generator</span>:<span class="th">~</span>$ <span class="tcur"></span></div>';
+  box.innerHTML = html;
+  if (end || LOG.fresh) box.scrollTop = box.scrollHeight;
+  LOG.fresh = false;
+  $('logState').textContent = LOG.state === 'ok' ? 'live · ' + LOG.list.length + (LOG.list.length === 1 ? ' change' : ' changes') : LOG.state === 'down' ? 'offline' : 'connecting';
+  $('logState').className = 'tst ' + LOG.state;
+}
+// the changes since the last one the page has; how many came (0 on the first read)
+async function refreshLog() {
+  let text;
+  try { text = await call('/codex/log', { after: LOG.last }); } catch (e) { text = ''; }
+  const nl = text.indexOf('\n');
+  const head = text.slice(0, nl < 0 ? text.length : nl).split('\t');
+  let list = null;
+  if (head[0] === 'ok') try { list = JSON.parse(text.slice(nl + 1)); } catch (e) { list = null; }
+  if (!Array.isArray(list)) {
+    if (LOG.state !== 'down') { LOG.state = 'down'; renderLog(); }
+    return 0;
+  }
+  const first = LOG.state === 'load';
+  const last = +head[1] || 0;
+  // a log the api-server started over (its file cleared) comes whole
+  if (last < LOG.last) LOG.list = [];
+  LOG.list = LOG.list.concat(list.filter(r => r && typeof r === 'object')).slice(-200);
+  LOG.last = last;
+  if (first) LOG.fresh = true;
+  if (first || LOG.state !== 'ok' || list.length) { LOG.state = 'ok'; renderLog(); }
+  return first ? 0 : list.length;
+}
+// every 20 s while the page shows: another player's change brings the cards up to date too
+let logBusy = false;
+async function pollLog() {
+  if (logBusy || document.visibilityState !== 'visible') return;
+  logBusy = true;
+  const came = await refreshLog();
+  if (came && !ACC.saving && !deletingId) { await Promise.all([refreshFile(), refreshUsed()]); render(); }
+  logBusy = false;
 }
 async function saveCodex() {
   if (ACC.saving) return;
@@ -1401,7 +1524,6 @@ async function saveCodex() {
   if (a[0] === 'ok') {
     // the builder stays on the codex it saved
     editId = +a[1];
-    MINE.add(editId);
     freshId = a[2] ? editId : 0;
     flash(!own ? 'Saved to codex_db.conf.' : a[2] ? 'Updated in codex_db.conf.' : 'No change to save.');
     renderOut();
@@ -1427,14 +1549,13 @@ async function deleteCodex(id) {
   if (a[0] === 'ok') {
     // the builder keeps it, as a new codex
     if (editId === id) editId = 0;
-    MINE.delete(id);
     flash('Deleted codex ' + id + ' from codex_db.conf.');
     await refresh();
     return;
   }
   if (a[1] === 'login') { loginEnded(a[2]); return; }
   Object.assign(cardNote, { id, text: a[2] || 'Not deleted.' });
-  if (a[1] === 'gone' || a[1] === 'owner') await refresh();
+  if (a[1] === 'gone') await refresh();
   else render();
 }
 
@@ -1469,12 +1590,17 @@ function wire() {
   $('copy').addEventListener('click', () => copyText(confOf(S), 'Copied the entry.'));
   $('copyAll').addEventListener('click', () => copyText(FILE.text, 'Copied codex_db.conf.'));
   $('save').addEventListener('click', saveCodex);
-  $('newCx').addEventListener('click', () => {
+  const blank = () => {
     editId = 0;
     load({ name: '', tab: S.tab, cat: S.cat, cls: S.cls, id: '', start: '', end: '', slots: [], stats: [] });
     render();
     $('cName').focus();
-  });
+  };
+  $('newCx').addEventListener('click', blank);
+  // out of edit mode: the saved codex stays as codex_db.conf has it, the builder starts a new one
+  $('cancelEdit').addEventListener('click', () => { blank(); flash('Edit canceled. Nothing changed in codex_db.conf.'); });
+  setInterval(pollLog, 20000);
+  document.addEventListener('visibilitychange', pollLog);
 }
 
 function notes() {
@@ -1496,6 +1622,7 @@ wire();
 load(SAMPLE);
 notes();
 render();
+renderLog();
 refresh();
 </script>
 </body>
