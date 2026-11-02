@@ -191,14 +191,25 @@ button,input,select,textarea{font:inherit;color:inherit}
 .codebar .file{font:12.5px var(--f-mono);color:var(--soft)}
 .codebar .sp{margin-left:auto}
 .toast{font-size:12.5px;color:var(--good);min-width:0}
-.saved{display:flex;flex-direction:column;gap:6px}
-.sv{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--line);border-radius:3px;background:var(--panel2);font-size:13.5px}
-.sv b{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sv small{display:block;color:var(--muted);font-size:12px}
-.sv .btn{height:26px;padding:0 8px;font-size:12.5px}
-.sv.cur{border-color:rgba(229,169,58,.5)}
-.sv small a{color:var(--good);text-decoration:none}
-.sv small a:hover{text-decoration:underline}
+.saved{display:flex;flex-direction:column;gap:10px}
+.svc{display:flex;flex-direction:column;gap:8px;min-width:0;padding:10px;border:1px solid var(--line);border-radius:3px;background:var(--panel2)}
+.svc.cur{border-color:rgba(229,169,58,.6)}
+.svc.fresh{animation:svFresh 1.8s ease-out}
+@keyframes svFresh{from{box-shadow:0 0 0 3px rgba(98,210,111,.5)}to{box-shadow:0 0 0 3px rgba(98,210,111,0)}}
+.svh{display:flex;align-items:center;gap:6px;min-height:18px;font-size:12px}
+.svs{display:inline-flex;align-items:center;gap:6px;color:var(--muted)}
+.svs::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.svs.in{color:var(--good)}
+.sve{margin-left:auto;height:18px;padding:0 6px;border:1px solid rgba(229,169,58,.5);border-radius:3px;background:var(--amberbg);color:var(--amber2);font:600 11.5px/16px var(--f-ui)}
+.svcard{overflow-x:auto}
+.svi{display:flex;flex-wrap:wrap;gap:4px}
+.ic{display:inline-flex;align-items:center;gap:5px;max-width:100%;height:22px;padding:0 6px;border:1px solid var(--line);border-radius:3px;background:#12151B;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ic b{font:700 9.5px var(--f-ui);letter-spacing:.05em}
+.svm{font-size:12.5px;color:var(--soft)}
+.sva{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.sva a{margin-right:auto;font-size:12.5px;color:var(--good);text-decoration:none}
+.sva a:hover{text-decoration:underline}
+.sva .btn{height:28px;padding:0 10px;font-size:12.5px}
 .repo{margin:8px 0 0;font-size:12.5px;color:var(--muted)}
 .repo a{color:var(--amber2)}
 
@@ -673,6 +684,11 @@ function addItem(id) {
 }
 function tabInfo(t) { return TABS.find(x => x[0] === t); }
 function savedIds() { return new Set(saved.filter((_, i) => i !== editing).map(c => +c.id).filter(Boolean)); }
+// whether codex_db.conf on GitHub has a saved codex (its save's commit)
+const inRepo = cx => !!cx && /^https:\/\/github\.com\//.test(cx.commit || '');
+// the saved codex the builder edits when codex_db.conf has it: Save changes that entry (its id stays its own)
+function editingSaved() { return editing >= 0 && inRepo(saved[editing]) ? saved[editing] : null; }
+const ownId = id => { const own = editingSaved(); return !!own && +own.id === id; };
 // the ids codex_db.conf uses in a tab's range, as "1-2766"
 function usedText(lo, hi) {
   return usedRanges.filter(([a, b]) => b >= lo && a <= hi).map(([a, b]) => a === b ? a : a + '-' + b).join(', ');
@@ -704,6 +720,7 @@ function renderFields() {
   hint.className = 'hint';
   if (!S.id) hint.innerHTML = '<span class="nw">' + lo + '-' + hi + '</span>' + (usedText(lo, hi) ? '; in use ' + inUse : '');
   else if (!Number.isInteger(id) || id < lo || id > hi) { hint.textContent = 'Use ' + lo + '-' + hi + ' for ' + tabInfo(S.tab)[1] + '.'; hint.className = 'hint bad'; }
+  else if (ownId(id)) hint.textContent = 'This codex\'s id in codex_db.conf';
   else if (USED_IDS.has(id)) { hint.innerHTML = 'Already in codex_db.conf; in use ' + inUse + '.'; hint.className = 'hint bad'; }
   else if (savedIds().has(id)) { hint.textContent = 'Already in My codexes.'; hint.className = 'hint bad'; }
   else hint.textContent = 'Free';
@@ -903,23 +920,26 @@ function highlight(text) {
     .replace(/(:|, )(-?\d+)(?=[,;)\n]|$)/gm, '$1<span class="num">$2</span>')
     .replace(/(&lt;&quot;|&quot;&gt;)/g, '<span class="p">$1</span>');
 }
-function renderCard() {
-  const card = $('card');
-  const r = codexRarity();
+// a codex as the Codex window's card (the preview's and each of My codexes')
+function fillCard(card, cx) {
+  const r = cx.slots.reduce((m, s) => Math.max(m, s.r), 0);
   const star = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6l1.9 4 4.4.5-3.3 3 .9 4.3L8 11.2 4.1 13.4 5 9.1 1.7 6.1l4.4-.5z" fill="none" stroke="#6B7486" stroke-width="1.2" stroke-linejoin="round"/></svg>';
-  const chip = S.tab === 'Account' ? '<span class="tag" style="--c:#6EC6FF">ACCOUNT</span>' : S.tab === 'Event' ? '<span class="tag" style="--c:#FFA34D">EVENT</span>' : '';
-  card.innerHTML = '<div class="cxrl"><div class="cxn" style="color:' + RAR_COLOR[r] + '">' + esc(S.name || 'Untitled codex') + '</div><div class="cxst">' +
-    S.stats.map(t => shownInWindow(t) ? '<div class="rl">' + esc(statText(t)) + '</div>'
+  const chip = cx.tab === 'Account' ? '<span class="tag" style="--c:#6EC6FF">ACCOUNT</span>' : cx.tab === 'Event' ? '<span class="tag" style="--c:#FFA34D">EVENT</span>' : '';
+  card.innerHTML = '<div class="cxrl"><div class="cxn" style="color:' + RAR_COLOR[r] + '">' + esc(cx.name || 'Untitled codex') + '</div><div class="cxst">' +
+    cx.stats.map(t => shownInWindow(t) ? '<div class="rl">' + esc(statText(t)) + '</div>'
       : '<div class="rl off" title="The server gives it; the Codex window does not list it by name yet">' + esc(statText(t)) + '</div>').join('') + '</div><div class="cxrf">' + star + chip + '</div></div>';
   const wells = el('div', 'wells');
-  for (const s of S.slots) {
+  for (const s of cx.slots) {
     const it = ITEM[s.id];
     const w = el('div', 'vw r' + s.r, iconOf(it) + (s.ref ? '<span class="ref">+' + s.ref + '</span>' : '') + (s.amt > 1 ? '<span class="amt">' + s.amt + '</span>' : ''));
     w.title = RAR[s.r] + ' ' + (s.ref ? '+' + s.ref + ' ' : '') + label(it) + (s.amt > 1 ? ' x' + s.amt : '');
     wells.appendChild(w);
   }
   card.appendChild(wells);
-  $('capR').textContent = S.slots.length ? RAR[r] + ' codex' : '';
+}
+function renderCard() {
+  fillCard($('card'), S);
+  $('capR').textContent = S.slots.length ? RAR[codexRarity()] + ' codex' : '';
 }
 function issues() {
   const out = [];
@@ -931,7 +951,7 @@ function issues() {
   if (!S.stats.length) out.push(['e', 'Add at least one stat.']);
   if (S.stats.some(t => !(t.v > 0))) out.push(['e', 'Every stat needs a value above 0.']);
   if (!S.id || !Number.isInteger(id) || id < lo || id > hi) out.push(['e', name + ' ids are ' + lo + '-' + hi + '.']);
-  else if (USED_IDS.has(id)) out.push(['e', 'Id ' + id + ' is already in codex_db.conf (' + usedText(lo, hi) + ' are in use).']);
+  else if (USED_IDS.has(id) && !ownId(id)) out.push(['e', 'Id ' + id + ' is already in codex_db.conf (' + usedText(lo, hi) + ' are in use).']);
   else if (savedIds().has(id)) out.push(['e', 'Id ' + id + ' is already in My codexes.']);
   if (S.tab === 'Event' && (!S.start || !S.end)) out.push(['e', 'An Event codex needs its start and end.']);
   if (S.tab === 'Event' && S.start && S.end && S.end <= S.start) out.push(['e', 'The event ends before it starts.']);
@@ -943,17 +963,37 @@ function issues() {
     ', but the Codex window does not list ' + (hidden.length > 1 ? 'them' : 'it') + ' by name yet (needs a client and server update).']);
   if (nameWidth(S.name) > NAME_FIT) out.push(['w', 'The title is wider than the card (' + NAME_FIT + ' px) and ends in "..." in game.']);
   if (S.tab === 'CardAlbum' && S.slots.some(s => !ITEM[s.id].card)) out.push(['w', 'Card Album codexes hold cards; this one has equipment too.']);
-  if (!out.some(o => o[0] === 'e')) out.unshift(['ok', 'Ready: Save puts it in codex_db.conf on GitHub (or Copy it).']);
+  const own = editingSaved();
+  if (!out.some(o => o[0] === 'e')) out.unshift(['ok', !own ? 'Ready: Save puts it in codex_db.conf on GitHub (or Copy it).'
+    : unchanged() ? 'codex_db.conf has this codex as it is now.' : 'Ready: Update changes codex ' + own.id + ' in codex_db.conf.']);
   return out;
 }
+// whether the builder still holds the saved codex it edits, as codex_db.conf has it
+function unchanged() { const own = editingSaved(); return !!own && confOf(normalized(own)) === confOf(S); }
 function renderIssues() {
   $('issues').innerHTML = issues().map(([c, t]) => '<li class="' + c + '">' + esc(t) + '</li>').join('');
 }
 function renderOut() {
   renderCard();
   $('conf').innerHTML = highlight(confOf(S));
-  $('save').textContent = ACC.saving ? 'Saving...' : loggedIn() ? 'Save to codex_db.conf' : 'Log in to save';
-  $('save').disabled = ACC.saving;
+  const same = loggedIn() && unchanged();
+  $('save').textContent = ACC.saving ? 'Saving...' : !loggedIn() ? 'Log in to save' : same ? 'Saved' : editingSaved() ? 'Update codex_db.conf' : 'Save to codex_db.conf';
+  $('save').disabled = ACC.saving || same;
+}
+// the card of a codex just saved, lit once
+let freshCard = null;
+function metaText(cx) {
+  const where = [tabInfo(cx.tab) ? tabInfo(cx.tab)[1] : cx.tab, cx.cat].filter(Boolean).join(' / ');
+  const more = cx.tab === 'Character' ? cx.cls || 'Every class' : cx.tab === 'Event' && cx.start ? date(cx.start) + ' to ' + date(cx.end) : '';
+  return ['Id ' + cx.id, where, more].filter(Boolean).join(' · ');
+}
+function editSaved(i) {
+  load(saved[i]);
+  editing = i;
+  render();
+  const top = $('hBuild').getBoundingClientRect().top;
+  if (top < 0 || top > innerHeight - 120) $('hBuild').scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  $('cName').focus({ preventScroll: true });
 }
 function renderSaved() {
   const box = $('saved');
@@ -961,21 +1001,43 @@ function renderSaved() {
   $('savedN').textContent = saved.length ? saved.length + ' saved in this browser' : '';
   $('copyAll').disabled = !saved.length;
   if (!saved.length) {
-    box.appendChild(el('div', 'empty', 'The codexes you save show here, in this browser. Copy all puts their entries together.'));
+    box.appendChild(el('div', 'empty', 'The codexes you save show here as cards, in this browser. Edit one to change it in codex_db.conf.'));
     return;
   }
   saved.forEach((cx, i) => {
-    const r = cx.slots.reduce((m, s) => Math.max(m, s.r), 0);
-    const where = /^https:\/\/github\.com\//.test(cx.commit || '') ? ' · <a href="' + esc(cx.commit) + '" target="_blank" rel="noopener">in codex_db.conf</a>' : '';
-    const d = el('div', 'sv' + (i === editing ? ' cur' : ''), '<div style="min-width:0"><b style="color:' + RAR_COLOR[r] + '">' + esc(cx.name || 'Untitled') +
-      '</b><small>Id ' + esc(cx.id) + ' · ' + esc(cx.tab === 'CardAlbum' ? 'Card Album' : cx.tab) + ' / ' + esc(cx.cat) + ' · ' + cx.slots.length + ' items · ' + cx.stats.length + ' stats' + where + '</small></div>');
+    const c = normalized(cx);
+    const repo = inRepo(cx);
+    const d = el('article', 'svc' + (i === editing ? ' cur' : '') + (cx === freshCard ? ' fresh' : ''));
+    d.setAttribute('aria-label', (c.name || 'Untitled codex') + ', id ' + c.id);
+    d.appendChild(el('div', 'svh', '<span class="svs' + (repo ? ' in' : '') + '">' + (repo ? 'In codex_db.conf' : 'Only in this browser') + '</span>' +
+      (i === editing ? '<span class="sve">Editing</span>' : '')));
+    const row = el('div', 'cxrow');
+    fillCard(row, c);
+    const stage = el('div', 'svcard');
+    stage.appendChild(row);
+    d.appendChild(stage);
+    d.appendChild(el('div', 'svi', c.slots.map(s => {
+      const it = ITEM[s.id];
+      return '<span class="ic" title="' + esc(RAR[s.r] + ' ' + (s.ref ? '+' + s.ref + ' ' : '') + label(it) + (s.amt > 1 ? ' x' + s.amt : '')) + '"><b style="color:' + RAR_COLOR[s.r] + '">' +
+        (RAR_SHORT[s.r] || '') + '</b>' + (s.ref ? '+' + s.ref + ' ' : '') + esc(label(it)) + (s.amt > 1 ? ' x' + s.amt : '') + '</span>';
+    }).join('')));
+    d.appendChild(el('div', 'svm', esc(metaText(c))));
+    const act = el('div', 'sva');
+    if (repo) {
+      const link = el('a', null, 'View the commit');
+      link.href = cx.commit;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      act.appendChild(link);
+    }
     const ed = el('button', 'btn', i === editing ? 'Editing' : 'Edit');
     ed.type = 'button';
     ed.disabled = i === editing;
-    ed.addEventListener('click', () => { load(cx); editing = i; render(); });
+    ed.title = repo ? 'Change it here; Update puts the change in codex_db.conf' : 'Open it in the builder';
+    ed.addEventListener('click', () => editSaved(i));
     const del = el('button', 'btn ghost', 'Delete');
     del.type = 'button';
-    if (where) del.title = 'From this list only; codex_db.conf keeps it';
+    if (repo) del.title = 'From this list only; codex_db.conf keeps it';
     del.addEventListener('click', () => {
       if (del.dataset.sure) {
         saved.splice(i, 1);
@@ -984,20 +1046,32 @@ function renderSaved() {
         render();
       } else { del.dataset.sure = '1'; del.textContent = 'Sure?'; }
     });
-    d.append(ed, del);
+    act.append(ed, del);
+    d.appendChild(act);
     box.appendChild(d);
   });
+  freshCard = null;
 }
 function snapshot() { return JSON.parse(JSON.stringify(S)); }
-function load(cx) {
-  Object.assign(S, JSON.parse(JSON.stringify(cx)));
-  // codexes saved by the earlier mockups: their Id Auto and Grade, and PVP and Boss under Race
-  delete S.idAuto;
-  delete S.grade;
-  S.stats = S.stats.filter(t => STAT[t.k]);
-  for (const t of S.stats) {
+// a copy of a codex as this page reads it: codexes saved by the earlier mockups lose their Id Auto and Grade, PVP and
+// Boss move from Race to Monster Type, and items or stats no longer in the lists drop
+function normalized(cx) {
+  const c = JSON.parse(JSON.stringify(cx));
+  delete c.idAuto;
+  delete c.grade;
+  c.slots = (c.slots || []).filter(s => ITEM[s.id]);
+  c.stats = (c.stats || []).filter(t => STAT[t.k]);
+  for (const t of c.stats) {
     if ((t.k === 'rdmg' || t.k === 'rres') && (t.arg === 'RC_Player' || t.arg === 'RC_Boss')) t.k = t.k === 'rdmg' ? 'tdmg' : 'tres';
   }
+  return c;
+}
+function load(cx) {
+  Object.assign(S, normalized(cx));
+  delete S.commit;
+  // a whole other codex: its title and id even in a focused box (render leaves those to the typing)
+  $('cName').value = S.name;
+  $('cId').value = S.id;
 }
 let toastTimer = 0;
 function flash(t) {
@@ -1134,23 +1208,33 @@ async function saveCodex() {
     slots: cx.slots.map(s => ({ item: ITEM[s.id].a, r: s.r, ref: s.ref, amt: s.amt })),
     stats: cx.stats.map(t => ({ k: t.k, arg: t.arg, v: t.v }))
   };
+  // the saved codex it replaces (in this list), and in codex_db.conf when it is there
+  const at = editing;
+  const target = at >= 0 ? saved[at] : null;
+  const own = inRepo(target) ? target : null;
+  const fields = { session: ACC.token, codex: JSON.stringify(codex) };
+  if (own) fields.edit = own.id;
   ACC.saving = true;
   renderOut();
   let a;
-  try { a = (await call('/codex/save', { session: ACC.token, codex: JSON.stringify(codex) })).split('\t'); } catch (e) { a = ['error', 'net', 'The save server cannot be reached. Try again in a moment.']; }
+  try { a = (await call('/codex/save', fields)).split('\t'); } catch (e) { a = ['error', 'net', 'The save server cannot be reached. Try again in a moment.']; }
   ACC.saving = false;
   if (a[0] === 'ok') {
-    cx.commit = a[2] || '';
-    if (editing >= 0 && !saved[editing].commit) saved[editing] = cx; else saved.push(cx);
-    editing = -1;
+    cx.commit = a[2] || (own ? own.commit : '');
+    const i = target ? saved.indexOf(target) : -1;
+    if (i >= 0) saved[i] = cx; else saved.push(cx);
+    if (editing === at) editing = saved.indexOf(cx);
     persist();
-    flash('Saved to codex_db.conf.');
+    freshCard = cx;
+    flash(!own ? 'Saved to codex_db.conf.' : a[2] ? 'Updated in codex_db.conf.' : 'No change to save.');
     render();
     refreshUsed();
     return;
   }
   if (a[1] === 'login') { loginEnded(a[2]); return; }
   if (a[1] === 'taken') refreshUsed();
+  // gone from codex_db.conf (its owner took it out on GitHub): the next Save adds it again
+  if (a[1] === 'gone' && own) { own.commit = ''; persist(); render(); refreshUsed(); flash(a[2] + ' Save adds it again.'); return; }
   flash(a[2] || 'Not saved.');
   renderOut();
 }
@@ -1184,7 +1268,7 @@ function wire() {
     render();
   });
   $('copy').addEventListener('click', () => copyText(confOf(S), 'Copied the entry.'));
-  $('copyAll').addEventListener('click', () => copyText(saved.map(confOf).join('\n'), 'Copied ' + saved.length + ' codexes.'));
+  $('copyAll').addEventListener('click', () => copyText(saved.map(cx => confOf(normalized(cx))).join('\n'), 'Copied ' + saved.length + ' codexes.'));
   $('save').addEventListener('click', saveCodex);
   $('newCx').addEventListener('click', () => {
     editing = -1;
