@@ -12,7 +12,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;700&family=JetBrains+Mono&family=Marcellus+SC&display=swap">
 <style>
 /* Layout: a three-pane workbench (items | codex | preview + codex_db.conf) that stacks to one column on a phone, the
-   log of changes as a terminal, then the mockup notes. One dark look on purpose: it is the game client's own palette (slate panels, amber accent, the rarity
+   log of changes as a terminal with who is editing beside it, then the mockup notes. One dark look on purpose: it is the game client's own palette (slate panels, amber accent, the rarity
    colours of the item wells). */
 :root{
   color-scheme:dark;
@@ -125,6 +125,10 @@ a.btn{text-decoration:none}
 .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
 .fields .idf{display:flex;gap:4px}
 .fields .idf .inp{min-width:0}
+.idbox{position:relative}
+.idbox .inp{padding-right:54px;color:var(--soft);cursor:default;font-variant-numeric:tabular-nums}
+.idbox .inp:hover{border-color:var(--line2)}
+.auto{position:absolute;right:7px;top:8px;height:18px;padding:0 6px;border:1px solid rgba(229,169,58,.5);border-radius:3px;background:var(--amberbg);color:var(--amber2);font:600 10.5px/16px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;pointer-events:none}
 .hint{margin:4px 0 0;font-size:12px;color:var(--muted)}
 .hint.bad{color:var(--bad)}
 .hint .nw{white-space:nowrap}
@@ -218,8 +222,9 @@ a.btn{text-decoration:none}
 .repo{margin:8px 0 0;font-size:12.5px;color:var(--muted)}
 .repo a{color:var(--amber2)}
 
-/* ---------- the log of changes: a terminal across the bottom ---------- */
-.term{margin-top:24px;border:1px solid var(--line);border-radius:3px;background:#07080B;overflow:hidden}
+/* ---------- the log of changes: a terminal across the bottom, who is editing beside it ---------- */
+.termrow{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:14px;margin-top:24px;align-items:start}
+.term{min-width:0;border:1px solid var(--line);border-radius:3px;background:#07080B;overflow:hidden}
 .tbar{display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;border-bottom:1px solid var(--line);background:var(--panel)}
 .tdots{display:flex;gap:6px}
 .tdots i{width:9px;height:9px;border-radius:50%;background:var(--line2)}
@@ -244,6 +249,22 @@ a.btn{text-decoration:none}
 .tk{color:var(--soft)}
 .tcur{display:inline-block;width:.6em;height:1.1em;vertical-align:-.2em;background:var(--soft);animation:tBlink 1.1s steps(1) infinite}
 @keyframes tBlink{50%{opacity:0}}
+.eds{min-width:0;border:1px solid var(--line);border-radius:3px;background:#07080B;overflow:hidden}
+.wlist{height:288px;margin:0;padding:6px 0;list-style:none;overflow:auto;overscroll-behavior:contain}
+.wp{display:grid;grid-template-columns:28px minmax(0,1fr);gap:9px;align-items:center;padding:6px 12px}
+.wp img,.wi{width:28px;height:28px;border-radius:3px;background:var(--panel2)}
+.wi{display:grid;place-items:center;font:600 13px var(--f-ui);color:var(--soft)}
+.wm{min-width:0}
+.wn{display:flex;align-items:center;gap:6px;min-width:0;font-weight:600;font-size:13.5px;line-height:18px}
+.wnn{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wy{flex:none;height:16px;padding:0 5px;border:1px solid var(--line2);border-radius:3px;font:600 10px/14px var(--f-ui);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ws{font:12px/1.45 var(--f-mono);color:var(--muted);overflow-wrap:anywhere}
+.ws b{color:var(--fg);font-weight:600}
+.wt{color:var(--soft)}
+.wp-edit .wv{color:var(--amber2)}.wp-new .wv{color:var(--good)}
+.wp-view{opacity:.65}
+.wnone{padding:10px 12px;font:12.5px/1.5 var(--f-mono);color:var(--muted)}
+.wnote{height:32px;margin:0;padding:0 12px;border-top:1px solid var(--line);font:12px/31px var(--f-ui);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---------- Discord login ---------- */
 .acct{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;min-height:32px}
@@ -289,6 +310,8 @@ a.btn{text-decoration:none}
   .build{order:-1}
   .out .pb{display:flex;align-items:stretch}
   .list{max-height:60vh}
+  .termrow{grid-template-columns:minmax(0,1fr)}
+  .wlist{height:auto;max-height:240px}
   .notes{grid-template-columns:minmax(0,1fr)}
 }
 @media (max-width:560px){
@@ -385,7 +408,7 @@ a.btn{text-decoration:none}
         <div><label class="lbl" for="cTab">Tab</label><select class="sel" id="cTab"></select></div>
         <div><label class="lbl" for="cCat">Category</label><select class="sel" id="cCat"></select></div>
         <div id="wClass"><label class="lbl" for="cClass">Class line</label><select class="sel" id="cClass"></select></div>
-        <div><label class="lbl" for="cId">Id</label><input class="inp" id="cId" inputmode="numeric" autocomplete="off" placeholder="Type an id"><p class="hint" id="idHint"></p></div>
+        <div><label class="lbl" for="cId">Id</label><div class="idbox"><input class="inp" id="cId" readonly autocomplete="off" title="Auto-increment: the save server gives the id when it saves"><span class="auto" id="idAuto">Auto</span></div><p class="hint" id="idHint"></p></div>
         <div id="wStart" hidden><label class="lbl" for="cStart">Start</label><input class="inp" id="cStart" type="datetime-local"></div>
         <div id="wEnd" hidden><label class="lbl" for="cEnd">End</label><input class="inp" id="cEnd" type="datetime-local"></div>
       </div>
@@ -422,10 +445,17 @@ a.btn{text-decoration:none}
   </section>
 </main>
 
+<div class="termrow">
 <section class="term" aria-labelledby="hLog">
   <div class="tbar"><span class="tdots" aria-hidden="true"><i></i><i></i><i></i></span><h2 id="hLog">codex_db.conf log</h2><span class="tst load" id="logState">connecting</span></div>
   <div class="tbody" id="log" role="log" aria-live="polite" tabindex="0"></div>
 </section>
+<aside class="eds" aria-labelledby="hWho">
+  <div class="tbar"><h2 id="hWho">Editing now</h2><span class="tst load" id="whoState">connecting</span></div>
+  <ul class="wlist" id="who" aria-live="polite"></ul>
+  <p class="wnote" id="whoNote"></p>
+</aside>
+</div>
 
 </div>
 <script>
@@ -549,10 +579,8 @@ const AEGIS = {};
 LIST.forEach(it => { AEGIS[it.a] = it; });
 // the ids in use: the saved codexes of codex_db.conf on GitHub (the api-server's list); the game server's codexes are
 // not counted, the saved ones are a new set from id 1
-let usedRanges = [];
 const USED_IDS = new Set();
 function setUsed(ranges) {
-  usedRanges = ranges;
   USED_IDS.clear();
   ranges.forEach(([a, b]) => { for (let i = a; i <= b; i++) USED_IDS.add(i); });
 }
@@ -618,7 +646,7 @@ const FILE = { state: 'load', text: '', list: [], error: '' };
 let editId = 0;
 
 const SAMPLE = {
-  name: 'Orc Warband', tab: 'Character', cat: 'Gear Set', cls: 'Swordsman', id: '2767',
+  name: 'Orc Warband', tab: 'Character', cat: 'Gear Set', cls: 'Swordsman', id: '',
   start: '', end: '',
   slots: [{ id: 1304, r: 2, ref: 4, amt: 1 }, { id: 2299, r: 1, ref: 0, amt: 1 }, { id: 2104, r: 1, ref: 3, amt: 1 },
     { id: 2304, r: 1, ref: 0, amt: 1 }, { id: 2504, r: 1, ref: 0, amt: 1 }, { id: 2401, r: 1, ref: 0, amt: 1 }],
@@ -729,11 +757,27 @@ function editingSaved() {
   const e = editId ? fileEntry(editId) : null;
   return e ? e.cx : null;
 }
-const ownId = id => { const own = editingSaved(); return !!own && +own.id === id; };
-// the ids codex_db.conf uses in a tab's range, as "1-2766"
-function usedText(lo, hi) {
-  return usedRanges.filter(([a, b]) => b >= lo && a <= hi).map(([a, b]) => a === b ? a : a + '-' + b).join(', ');
+// the id a new codex gets when it saves (auto-increment, as the api-server gives it from the file): the highest id of
+// the tab's range + 1, else the lowest free one; 0 when every id of the tab is in use
+function autoId(tab) {
+  const [, , lo, hi] = tabInfo(tab);
+  const used = new Set(USED_IDS);
+  FILE.list.forEach(e => used.add(+e.cx.id));
+  let top = 0;
+  used.forEach(id => { if (id >= lo && id <= hi && id > top) top = id; });
+  if (!top) return lo;
+  if (top < hi) return top + 1;
+  for (let id = lo; id <= hi; id++) if (!used.has(id)) return id;
+  return 0;
 }
+// the builder's id: the edited codex's own while it stays in its tab's range, else the tab's next one
+function shownId() {
+  const own = editingSaved();
+  const [, , lo, hi] = tabInfo(S.tab);
+  return own && +own.id >= lo && +own.id <= hi ? +own.id : autoId(S.tab);
+}
+// the builder's entry with that id (the preview, Copy)
+const builderConf = () => confOf(Object.assign({}, S, { id: shownId() }));
 function fillSelect(sel, opts, value) {
   sel.innerHTML = opts.map(([v, t]) => '<option value="' + esc(v) + '"' + (String(v) === String(value) ? ' selected' : '') + '>' + esc(t) + '</option>').join('');
 }
@@ -749,21 +793,20 @@ function renderFields() {
   $('wClass').hidden = S.tab !== 'Character';
   fillSelect($('cClass'), [['', 'Every class']].concat(LINES.map(l => [l, l])), S.cls);
   $('wStart').hidden = $('wEnd').hidden = S.tab !== 'Event';
-  if (document.activeElement !== $('cId')) $('cId').value = S.id;
   if (document.activeElement !== $('cName')) $('cName').value = S.name;
   $('cStart').value = S.start;
   $('cEnd').value = S.end;
-  const [, , lo, hi] = tabInfo(S.tab);
-  const id = +S.id;
+  const [, tabName, lo, hi] = tabInfo(S.tab);
+  const own = editingSaved();
+  const id = shownId();
+  const mine = !!own && +own.id === id;
+  $('cId').value = id || '';
+  $('idAuto').hidden = mine || !id;
   const hint = $('idHint');
-  // ranges kept whole on a line ("1-2766" does not break at its dash)
-  const inUse = usedText(lo, hi).split(', ').map(r => '<span class="nw">' + r + '</span>').join(', ');
   hint.className = 'hint';
-  if (!S.id) hint.innerHTML = '<span class="nw">' + lo + '-' + hi + '</span>' + (usedText(lo, hi) ? '; in use ' + inUse : '');
-  else if (!Number.isInteger(id) || id < lo || id > hi) { hint.textContent = 'Use ' + lo + '-' + hi + ' for ' + tabInfo(S.tab)[1] + '.'; hint.className = 'hint bad'; }
-  else if (ownId(id)) hint.textContent = 'This codex\'s id in codex_db.conf';
-  else if (USED_IDS.has(id)) { hint.innerHTML = 'Already in codex_db.conf; in use ' + inUse + '.'; hint.className = 'hint bad'; }
-  else hint.textContent = 'Free';
+  if (!id) { hint.textContent = 'Every ' + tabName + ' id (' + lo + '-' + hi + ') is in use.'; hint.className = 'hint bad'; }
+  else if (mine) hint.textContent = 'This codex\'s id in codex_db.conf';
+  else hint.textContent = (own ? 'It moves to the next ' : 'The next ') + tabName + ' id, given when it saves';
   const w = nameWidth(S.name || '');
   const fit = $('nameFit');
   fit.textContent = Math.ceil(w) + ' / ' + NAME_FIT + ' px';
@@ -986,14 +1029,13 @@ function renderCard() {
 function issues() {
   const out = [];
   const [, name, lo, hi] = tabInfo(S.tab);
-  const id = +S.id;
+  const id = shownId();
   if (!S.name.trim()) out.push(['e', 'Give the codex a title.']);
   else if (new TextEncoder().encode(S.name.trim()).length > 63) out.push(['e', 'The title is too long (63 bytes at most).']);
   if (!S.slots.length) out.push(['e', 'Add at least one item.']);
   if (!S.stats.length) out.push(['e', 'Add at least one stat.']);
   if (S.stats.some(t => !(t.v > 0))) out.push(['e', 'Every stat needs a value above 0.']);
-  if (!S.id || !Number.isInteger(id) || id < lo || id > hi) out.push(['e', name + ' ids are ' + lo + '-' + hi + '.']);
-  else if (USED_IDS.has(id) && !ownId(id)) out.push(['e', 'Id ' + id + ' is already in codex_db.conf (' + usedText(lo, hi) + ' are in use).']);
+  if (!id) out.push(['e', 'Every ' + name + ' id (' + lo + '-' + hi + ') is in codex_db.conf already.']);
   if (S.tab === 'Event' && (!S.start || !S.end)) out.push(['e', 'An Event codex needs its start and end.']);
   if (S.tab === 'Event' && S.start && S.end && S.end <= S.start) out.push(['e', 'The event ends before it starts.']);
   if (S.slots.some(s => s.r === 4)) out.push(['w', 'Legendary: the server reads Rarity up to Epic (3) now, so this codex would not load until the Codex takes Legendary.']);
@@ -1005,23 +1047,25 @@ function issues() {
   if (nameWidth(S.name) > NAME_FIT) out.push(['w', 'The title is wider than the card (' + NAME_FIT + ' px) and ends in "..." in game.']);
   if (S.tab === 'CardAlbum' && S.slots.some(s => !ITEM[s.id].card)) out.push(['w', 'Card Album codexes hold cards; this one has equipment too.']);
   const own = editingSaved();
-  if (!out.some(o => o[0] === 'e')) out.unshift(['ok', !own ? 'Ready: Save puts it in codex_db.conf on GitHub (or Copy it).'
-    : unchanged() ? 'codex_db.conf has this codex as it is now.' : 'Ready: Update changes codex ' + own.id + ' in codex_db.conf.']);
+  if (!out.some(o => o[0] === 'e')) out.unshift(['ok', !own ? 'Ready: Save puts it in codex_db.conf on GitHub as codex ' + id + ' (or Copy it).'
+    : unchanged() ? 'codex_db.conf has this codex as it is now.' : 'Ready: Update changes codex ' + own.id + ' in codex_db.conf' +
+    (+own.id === id ? '.' : ', as codex ' + id + '.')]);
   return out;
 }
 // whether the builder still holds the saved codex it edits, as codex_db.conf has it
-function unchanged() { const own = editingSaved(); return !!own && confOf(normalized(own)) === confOf(S); }
+function unchanged() { const own = editingSaved(); return !!own && confOf(normalized(own)) === builderConf(); }
 function renderIssues() {
   $('issues').innerHTML = issues().map(([c, t]) => '<li class="' + c + '">' + esc(t) + '</li>').join('');
 }
 function renderOut() {
   renderCard();
-  $('conf').innerHTML = highlight(confOf(S));
+  $('conf').innerHTML = highlight(builderConf());
   const same = loggedIn() && unchanged();
   $('save').textContent = ACC.saving ? 'Saving...' : !loggedIn() ? 'Log in to save' : same ? 'Saved' : editingSaved() ? 'Update codex_db.conf' : 'Save to codex_db.conf';
   $('save').disabled = ACC.saving || same;
   $('cancelEdit').hidden = !editingSaved();
   $('cancelEdit').disabled = ACC.saving;
+  noteWho();
 }
 // ---------------------------------------------------------------- codex_db.conf read back
 // libconfig as codex_db.conf uses it: names, strings (and <"..."> scripts), numbers, groups, lists and arrays, comments
@@ -1252,9 +1296,10 @@ function normalized(cx) {
 function load(cx) {
   Object.assign(S, normalized(cx));
   delete S.commit;
-  // a whole other codex: its title and id even in a focused box (render leaves those to the typing)
+  // a whole other codex: its title even in a focused box (render leaves that to the typing)
   $('cName').value = S.name;
-  $('cId').value = S.id;
+  // what the builder holds when nothing is changed yet (Who: a new codex once it differs)
+  WHO.pristine = plainConf();
 }
 let toastTimer = 0;
 function flash(t) {
@@ -1355,6 +1400,7 @@ async function login() {
       Object.assign(ACC, { token: a[1], name: a[2], avatar: a[3], until: Date.now() + (+a[4] || 12) * 3600000, state: 'in', code: '', link: '' });
       keepLogin();
       render();
+      refreshWho();
       flash('Logged in as ' + a[2] + '.');
       setTimeout(() => { if (win && !win.closed) win.close(); }, 1500);
       return;
@@ -1368,7 +1414,8 @@ function logout() {
   const token = ACC.token;
   ACC.run++;
   loginEnded('');
-  if (token) call('/codex/logout', { session: token }).catch(() => {});
+  // the api-server takes the player off the list of who is here
+  if (token) call('/codex/logout', { session: token }).catch(() => {}).then(refreshWho);
 }
 // codex_db.conf as GitHub has it (every saved codex): the api-server's copy, new after each save and delete
 async function refreshFile(again) {
@@ -1396,6 +1443,7 @@ async function refreshUsed() {
 async function refresh() {
   await Promise.all([refreshFile(), refreshUsed(), refreshLog()]);
   render();
+  refreshWho();
 }
 
 // ---------------------------------------------------------------- the log of changes (the terminal at the bottom)
@@ -1501,18 +1549,91 @@ async function pollLog() {
   if (came && !ACC.saving && !deletingId) { await Promise.all([refreshFile(), refreshUsed()]); render(); }
   logBusy = false;
 }
+
+// ---------------------------------------------------------------- who is on the page (beside the terminal)
+// the logged-in players the api-server lists (their last calls), its clock and when it answered; state load, ok or
+// down; sent: what this page told it last; pristine: the builder as loaded (a new codex once it differs)
+const WHO = { list: [], now: 0, at: 0, state: 'load', sent: '', pristine: '' };
+const plainConf = () => confOf(Object.assign({}, S, { id: 0 }));
+// what this page's player does: edits a saved codex, makes a new one, or only has the page open
+function doing() {
+  const own = editingSaved();
+  if (own) return { doing: 'edit', id: String(own.id), name: own.name };
+  if (plainConf() !== WHO.pristine) return { doing: 'new', id: '0', name: S.name.trim() };
+  return { doing: 'view', id: '0', name: '' };
+}
+let whoTimer = 0;
+// the list; a logged-in player kept on it (every 15 s, also while the page is hidden, and soon after a change)
+async function refreshWho() {
+  clearTimeout(whoTimer);
+  const now = loggedIn() ? doing() : null;
+  // the api-server takes no empty form: doing alone only reads the list
+  const fields = now ? Object.assign({ session: ACC.token }, now) : { doing: 'view' };
+  let text = '';
+  try { text = await call('/codex/presence', fields); } catch (e) { text = ''; }
+  const nl = text.indexOf('\n');
+  const head = text.slice(0, nl < 0 ? text.length : nl).split('\t');
+  let list = null;
+  if (head[0] === 'ok') try { list = JSON.parse(text.slice(nl + 1)); } catch (e) { list = null; }
+  if (!Array.isArray(list)) { WHO.state = 'down'; renderWho(); return; }
+  WHO.sent = now ? JSON.stringify(now) : '';
+  Object.assign(WHO, { list: list.filter(p => p && typeof p === 'object'), now: +head[1] || Date.now() / 1000, at: Date.now(), state: 'ok' });
+  renderWho();
+}
+// after the builder changed: the api-server told a moment later, when what the player does changed
+function noteWho() {
+  if (!loggedIn() || JSON.stringify(doing()) === WHO.sent) return;
+  clearTimeout(whoTimer);
+  whoTimer = setTimeout(refreshWho, 1200);
+}
+// the page closed: off the list at once
+function leaveWho() {
+  if (!loggedIn() || !navigator.sendBeacon) return;
+  const form = new FormData();
+  form.append('session', ACC.token);
+  form.append('doing', 'gone');
+  navigator.sendBeacon(API + '/codex/presence', form);
+}
+const WHO_ORDER = { edit: 0, new: 1, view: 2 };
+function whoFor(p) {
+  const s = Math.max(0, Math.round(WHO.now + (Date.now() - WHO.at) / 1000 - (+p.since || 0)));
+  return s < 60 ? 'just now' : s < 3600 ? Math.floor(s / 60) + ' min' : Math.floor(s / 3600) + ' h ' + Math.floor(s % 3600 / 60) + ' min';
+}
+function renderWho() {
+  const list = WHO.list.slice().sort((a, b) => (WHO_ORDER[a.doing] ?? 3) - (WHO_ORDER[b.doing] ?? 3) || (+a.since || 0) - (+b.since || 0));
+  const editing = list.filter(p => p.doing === 'edit' || p.doing === 'new').length;
+  const title = n => n ? ' <span class="wt">' + esc('"' + n + '"') + '</span>' : '';
+  let html = '';
+  for (const p of list) {
+    const kind = WHO_ORDER[p.doing] !== undefined ? p.doing : 'view';
+    const me = loggedIn() && p.who === ACC.name;
+    const face = /^https:\/\//.test(p.avatar || '') ? '<img alt="" src="' + esc(p.avatar) + '">' : '<span class="wi" aria-hidden="true">' + esc((p.who || '?').slice(0, 1).toUpperCase()) + '</span>';
+    const what = kind === 'edit' ? '<span class="wv">editing</span> codex <b>' + esc(String(p.id)) + '</b>' + title(p.name)
+      : kind === 'new' ? '<span class="wv">making</span> a new codex' + title(p.name) : '<span class="wv">viewing</span> the page';
+    const at = new Date(((+p.since || 0) - WHO.now) * 1000 + WHO.at);
+    html += '<li class="wp wp-' + kind + '">' + face + '<div class="wm"><div class="wn"><span class="wnn">' + esc(p.who || 'Someone') + '</span>' + (me ? '<span class="wy">you</span>' : '') +
+      '</div><div class="ws" title="Since ' + pad(at.getHours()) + ':' + pad(at.getMinutes()) + '">' + what + ' · ' + whoFor(p) + '</div></div></li>';
+  }
+  if (!list.length) html = '<li class="wnone">' + (WHO.state === 'load' ? 'Checking who is here...' : WHO.state === 'down' ? 'The save server cannot be reached.' : 'No one is editing codex_db.conf right now.') + '</li>';
+  $('who').innerHTML = html;
+  $('whoNote').textContent = loggedIn() ? 'You show here while this page is open.' : 'Log in with Discord to show here while you edit.';
+  $('whoState').textContent = WHO.state === 'ok' ? editing + ' editing' : WHO.state === 'down' ? 'offline' : 'connecting';
+  $('whoState').className = 'tst ' + WHO.state;
+}
+
 async function saveCodex() {
   if (ACC.saving) return;
   if (issues().some(o => o[0] === 'e')) { flash('Fix the red items first.'); return; }
   if (!loggedIn()) { login(); return; }
   const cx = snapshot();
+  // the saved codex of codex_db.conf it changes
+  const own = editingSaved();
   const codex = {
-    id: cx.id, name: cx.name.trim(), tab: cx.tab, cat: cx.cat, cls: cx.cls, start: cx.start, end: cx.end,
+    // its own id, or 0: the api-server gives the tab's next one (auto-increment)
+    id: own && +own.id === shownId() ? +own.id : 0, name: cx.name.trim(), tab: cx.tab, cat: cx.cat, cls: cx.cls, start: cx.start, end: cx.end,
     slots: cx.slots.map(s => ({ item: ITEM[s.id].a, r: s.r, ref: s.ref, amt: s.amt })),
     stats: cx.stats.map(t => ({ k: t.k, arg: t.arg, v: t.v }))
   };
-  // the saved codex of codex_db.conf it changes
-  const own = editingSaved();
   const fields = { session: ACC.token, codex: JSON.stringify(codex) };
   if (own) fields.edit = own.id;
   ACC.saving = true;
@@ -1522,16 +1643,17 @@ async function saveCodex() {
   try { a = (await call('/codex/save', fields)).split('\t'); } catch (e) { a = ['error', 'net', 'The save server cannot be reached. Try again in a moment.']; }
   ACC.saving = false;
   if (a[0] === 'ok') {
-    // the builder stays on the codex it saved
+    // the builder stays on the codex it saved, with the id it got
     editId = +a[1];
+    S.id = a[1];
     freshId = a[2] ? editId : 0;
-    flash(!own ? 'Saved to codex_db.conf.' : a[2] ? 'Updated in codex_db.conf.' : 'No change to save.');
+    flash(!own ? 'Saved to codex_db.conf as codex ' + a[1] + '.' : a[2] ? 'Updated in codex_db.conf.' : 'No change to save.');
     renderOut();
     await refresh();
     return;
   }
   if (a[1] === 'login') { loginEnded(a[2]); return; }
-  if (a[1] === 'taken') refresh();
+  if (a[1] === 'taken' || a[1] === 'full') refresh();
   // gone from codex_db.conf (taken out on GitHub): the next Save adds it again
   if (a[1] === 'gone' && own) { editId = 0; refresh(); flash(a[2] + ' Save adds it again.'); return; }
   flash(a[2] || 'Not saved.');
@@ -1576,7 +1698,6 @@ function wire() {
   $('cTab').addEventListener('change', e => { S.tab = e.target.value; render(); });
   $('cCat').addEventListener('change', e => { S.cat = e.target.value; renderOut(); });
   $('cClass').addEventListener('change', e => { S.cls = e.target.value; render(); });
-  $('cId').addEventListener('input', e => { S.id = e.target.value.trim(); renderFields(); renderOut(); renderIssues(); });
   $('cStart').addEventListener('change', e => { S.start = e.target.value; renderOut(); renderIssues(); });
   $('cEnd').addEventListener('change', e => { S.end = e.target.value; renderOut(); renderIssues(); });
   $('clearSlots').addEventListener('click', () => { S.slots = []; render(); });
@@ -1587,7 +1708,7 @@ function wire() {
     S.stats.push({ k, arg: '', v: startValue(k) });
     render();
   });
-  $('copy').addEventListener('click', () => copyText(confOf(S), 'Copied the entry.'));
+  $('copy').addEventListener('click', () => copyText(builderConf(), 'Copied the entry.'));
   $('copyAll').addEventListener('click', () => copyText(FILE.text, 'Copied codex_db.conf.'));
   $('save').addEventListener('click', saveCodex);
   const blank = () => {
@@ -1601,6 +1722,8 @@ function wire() {
   $('cancelEdit').addEventListener('click', () => { blank(); flash('Edit canceled. Nothing changed in codex_db.conf.'); });
   setInterval(pollLog, 20000);
   document.addEventListener('visibilitychange', pollLog);
+  setInterval(refreshWho, 15000);
+  addEventListener('pagehide', leaveWho);
 }
 
 function notes() {
@@ -1623,6 +1746,7 @@ load(SAMPLE);
 notes();
 render();
 renderLog();
+renderWho();
 refresh();
 </script>
 </body>
