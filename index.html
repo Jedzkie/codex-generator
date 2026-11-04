@@ -934,13 +934,12 @@ const FILE = { state: 'load', text: '', list: [], error: '' };
 // the id of the saved codex the builder edits, 0 for a new one
 let editId = 0;
 
-const SAMPLE = {
-  name: 'Orc Warband', tab: 'Character', cat: 'Gear Set', cls: 'Swordsman', id: '',
-  start: '', end: '',
-  slots: [{ id: 1304, r: 2, ref: 4, amt: 1 }, { id: 2299, r: 1, ref: 0, amt: 1 }, { id: 2104, r: 1, ref: 3, amt: 1 },
-    { id: 2304, r: 1, ref: 0, amt: 1 }, { id: 2504, r: 1, ref: 0, amt: 1 }, { id: 2401, r: 1, ref: 0, amt: 1 }],
-  stats: [{ k: 'atk', arg: '', v: 6 }, { k: 'rdmg', arg: 'RC_DemiHuman', v: 2 }, { k: 'maxhp', arg: '', v: 60 }]
-};
+// An empty codex in the builder (no title, dates, items or stats; the tab, category and class line kept): on a page
+// load, New codex, Cancel and after every save.
+function blankBuilder() {
+  editId = 0;
+  load({ name: '', tab: S.tab, cat: S.cat, cls: S.cls, id: '', start: '', end: '', slots: [], stats: [] });
+}
 
 // ---------------------------------------------------------------- item browser
 const rows = {};
@@ -2042,12 +2041,11 @@ async function saveCodex() {
   try { a = (await call('/codex/save', fields)).split('\t'); } catch (e) { a = ['error', 'net', 'The save server cannot be reached. Try again in a moment.']; }
   ACC.saving = false;
   if (a[0] === 'ok') {
-    // the builder stays on the codex it saved, with the id it got
-    editId = +a[1];
-    S.id = a[1];
-    freshId = a[2] ? editId : 0;
+    // the builder empty again for the next codex; the one saved lit on its card
+    freshId = a[2] ? +a[1] : 0;
+    blankBuilder();
     flash(!own ? 'Saved to codex_db.conf as codex ' + a[1] + '.' : a[2] ? 'Updated in codex_db.conf.' : 'No change to save.');
-    renderOut();
+    render();
     await refresh();
     return;
   }
@@ -2114,8 +2112,7 @@ function wire() {
   $('copyAll').addEventListener('click', () => copyText(FILE.text, 'Copied codex_db.conf.'));
   $('save').addEventListener('click', saveCodex);
   const blank = () => {
-    editId = 0;
-    load({ name: '', tab: S.tab, cat: S.cat, cls: S.cls, id: '', start: '', end: '', slots: [], stats: [] });
+    blankBuilder();
     render();
     $('cName').focus();
   };
@@ -2145,7 +2142,7 @@ buildList();
 buildFilters();
 buildMvps();
 wire();
-load(SAMPLE);
+blankBuilder();
 notes();
 render();
 renderLog();
